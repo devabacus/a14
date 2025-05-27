@@ -42,7 +42,7 @@ services:
     volumes:
       - app2_data:/var/lib/postgresql/data
     networks:
-      - serverpod2-network
+      - serverpod-network
 
   serverpod:
     restart: unless-stopped
