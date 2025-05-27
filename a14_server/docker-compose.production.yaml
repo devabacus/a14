@@ -1,0 +1,106 @@
+services:
+  traefik:
+    restart: on-failure
+    image: traefik:v3.0
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=frolprank@gmail.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "8080:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./letsencrypt:/letsencrypt"
+    depends_on:    
+      - postgres
+      - serverpod
+    networks:
+      - serverpod-network
+         
+  postgres:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    image: postgres:16
+    labels:
+      - "traefik.enable=false"
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - app2_data:/var/lib/postgresql/data
+    networks:
+      - serverpod2-network
+
+  serverpod:
+    restart: unless-stopped
+    image: ghcr.io/${GHCR_ORG}/a13_server:latest
+    environment:
+      SERVERPOD_DATABASE_PASSWORD: ${SERVERPOD_DATABASE_PASSWORD}
+      SERVERPOD_DATABASE_HOST: postgres
+      SERVERPOD_DATABASE_NAME: ${SERVERPOD_DATABASE_NAME}
+      SERVERPOD_DATABASE_USER: ${SERVERPOD_DATABASE_USER}
+      SERVERPOD_DATABASE_PORT: 5432
+      SERVERPOD_DATABASE_REQUIRE_SSL: false
+      SERVERPOD_DATABASE_IS_UNIX_SOCKET: false
+      SERVERPOD_SERVICE_SECRET: ${SERVERPOD_SERVICE_SECRET}
+      SERVERPOD_MAX_REQUEST_SIZE: ${SERVERPOD_MAX_REQUEST_SIZE}
+    command:
+      [
+        "--mode",
+        "production",
+        "--server-id",
+        "default",
+        "--logging",
+        "normal",
+        "--role",
+        "monolith",
+        "--apply-migrations",
+      ]
+    labels:
+      - "traefik.enable=true"
+      # API маршруты для app2
+      - "traefik.http.routers.api3.rule=Host(`api3.my-points.ru`)"
+      - "traefik.http.routers.api3.entrypoints=websecure"
+      - "traefik.http.routers.api3.service=api3-service"
+      - "traefik.http.routers.api3.tls.certresolver=myresolver"
+      - "traefik.http.services.api3-service.loadbalancer.server.port=8080"
+
+      # Insights маршруты для app2
+      - "traefik.http.routers.insights3.rule=Host(`insights3.my-points.ru`)"
+      - "traefik.http.routers.insights3.entrypoints=websecure"
+      - "traefik.http.routers.insights3.service=insights3-service"
+      - "traefik.http.routers.insights3.tls.certresolver=myresolver"
+      - "traefik.http.services.insights3-service.loadbalancer.server.port=8081"
+
+      # Web маршруты для app2
+      - "traefik.http.routers.web3.rule=Host(`web3.my-points.ru`)"
+      - "traefik.http.routers.web3.entrypoints=web3secure"
+      - "traefik.http.routers.web3.service=web3-service"
+      - "traefik.http.routers.web3.tls.certresolver=myresolver"
+      - "traefik.http.services.web3-service.loadbalancer.server.port=8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - serverpod-network
+
+networks:
+  serverpod2-network:
+    name: serverpod-network
+    driver: bridge
+
+volumes:
+  app2_data:
