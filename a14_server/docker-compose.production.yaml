@@ -46,7 +46,7 @@ services:
 
   serverpod:
     restart: unless-stopped
-    image: ghcr.io/${GHCR_ORG}/a13_server:latest
+    image: ghcr.io/${GHCR_ORG}/a14_server:latest
     environment:
       SERVERPOD_DATABASE_PASSWORD: ${SERVERPOD_DATABASE_PASSWORD}
       SERVERPOD_DATABASE_HOST: postgres
@@ -87,7 +87,7 @@ services:
 
       # Web маршруты для app2
       - "traefik.http.routers.web3.rule=Host(`web3.my-points.ru`)"
-      - "traefik.http.routers.web3.entrypoints=web3secure"
+      - "traefik.http.routers.web3.entrypoints=websecure"
       - "traefik.http.routers.web3.service=web3-service"
       - "traefik.http.routers.web3.tls.certresolver=myresolver"
       - "traefik.http.services.web3-service.loadbalancer.server.port=8082"
@@ -98,7 +98,7 @@ services:
       - serverpod-network
 
 networks:
-  serverpod2-network:
+  serverpod-network:
     name: serverpod-network
     driver: bridge
 
